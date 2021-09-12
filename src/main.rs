@@ -2,6 +2,13 @@ use chrono::Local;
 use scraper;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use structopt::StructOpt;
+
+#[derive(StructOpt)]
+struct Cli {
+    #[structopt(short = "a", long = "area", default_value = "東京")]
+    area: String,
+}
 
 #[derive(Debug)]
 struct Program {
@@ -15,6 +22,8 @@ struct Program {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let args = Cli::from_args();
+
     let area_ids: HashMap<&str, &str> = [
         ("札幌", "1"),
         ("函館", "8"),
@@ -75,7 +84,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     .cloned()
     .collect();
 
-    let area_id = area_ids.get("東京");
+    let area_id = area_ids.get(&*args.area.to_string());
     if area_id.is_none() {
         panic!("invalid area");
     }
