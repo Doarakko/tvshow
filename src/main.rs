@@ -13,6 +13,7 @@ struct Cli {
 #[derive(Debug)]
 struct Program {
     id: String,
+    channel: usize,
     name: String,
     description: String,
     link: String,
@@ -86,7 +87,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let area_id = area_ids.get(&*args.area.to_string());
     if area_id.is_none() {
-        panic!("invalid area");
+        let mut s = String::new();
+        for (k, _v) in area_ids {
+            if s.chars().count() == 0 {
+                s = format!("{}", k);
+            } else {
+                s = format!("{} {}", s, k);
+            }
+        }
+        panic!("invalid area, please choose from here.\n{}", s);
     }
 
     let now = Local::now().format("%Y%m%d%H%M").to_string();
@@ -97,52 +106,52 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         date,
         area_id.unwrap()
     );
-    let html = reqwest::get(url).await?.text().await?;
 
+    let html = reqwest::get(url).await?.text().await?;
     let document = scraper::Html::parse_document(&html);
-    let selector = scraper::Selector::parse("div #program_area ul li").unwrap();
+    let channels: Vec<String> = get_channels(&document);
+    let program_selector = scraper::Selector::parse("div #program_area ul li").unwrap();
 
     let mut programs = BTreeMap::new();
-    for node in document.select(&selector) {
-        let id = node.value().attr("se-id");
+    for node in document.select(&program_selector) {
+        let parent = node.parent();
+        let channel = &(parent
+            .iter()
+            .next()
+            .unwrap()
+            .value()
+            .as_element()
+            .unwrap()
+            .id)
+            .as_ref()
+            .unwrap()
+            .to_string();
+        let channel_id: usize = String::from(channel)
+            .replace("program_line_", "")
+            .to_string()
+            .parse()
+            .unwrap();
 
+        let id = node.value().attr("se-id");
         let inner_html = node.inner_html();
         let fragment = scraper::Html::parse_fragment(&inner_html);
-
-        let name_selector = scraper::Selector::parse("div a p").unwrap();
-        let mut name = None;
-        for p in fragment.select(&name_selector) {
-            name = p.text().next();
-            break;
-        }
-
-        let link_selector = scraper::Selector::parse("div a").unwrap();
-        let mut link = None;
-        for p in fragment.select(&link_selector) {
-            link = p.value().attr("href");
-            break;
-        }
-
-        let description_selector = scraper::Selector::parse("div p.program_detail").unwrap();
-        let mut description = None;
-        for p in fragment.select(&description_selector) {
-            description = p.text().next();
-            break;
-        }
-
+        let name = get_program_name(&fragment);
+        let link = get_program_link(&fragment);
+        let description = get_program_description(&fragment);
         let start_time = node.value().attr("s");
         let end_time = node.value().attr("e");
-
-        if name.is_none() {
+        if name == "" {
             continue;
         }
+
         programs.insert(
-            start_time.unwrap_or("").to_string(),
+            start_time.unwrap_or("").to_string() + "_" + &channel_id.to_string(),
             Program {
                 id: id.unwrap_or("").to_string()[7..].to_string(),
-                name: name.unwrap_or("").to_string(),
-                description: description.unwrap_or("").to_string(),
-                link: link.unwrap_or("").to_string(),
+                channel: channel_id,
+                name: name,
+                description: description,
+                link: link,
                 start_time: start_time.unwrap_or("").to_string(),
                 end_time: end_time.unwrap_or("").to_string(),
             },
@@ -153,19 +162,58 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         if v.end_time < now {
             continue;
         }
-
         println!(
-            "{}:{}~{}:{} {} [{}]",
+            "{}:{}~{}:{} 【{}】{} [{}]",
             &v.start_time[8..10],
             &v.start_time[10..12],
             &v.end_time[8..10],
             &v.end_time[10..12],
+            channels[v.channel - 1],
             v.name,
             v.id,
         );
     }
 
-    println!("\nThis TV schedule is got from テレビ番組表Gガイド(https://bangumi.org)");
+    println!("\nThis TV schedule is got from テレビ番組表Gガイド(https://bangumi.org).");
 
     Ok(())
+}
+
+fn get_channels(document: &scraper::Html) -> Vec<String> {
+    let mut channels: Vec<String> = Vec::new();
+    let channel_selector = scraper::Selector::parse("div #ch_area ul li p").unwrap();
+    for node in document.select(&channel_selector) {
+        channels.push(node.text().next().unwrap_or("").to_string());
+    }
+
+    channels
+}
+
+fn get_program_description(document: &scraper::Html) -> String {
+    let selector = scraper::Selector::parse("div p.program_detail").unwrap();
+    for p in document.select(&selector) {
+        return p.text().next().unwrap_or("").to_string();
+    }
+    "".to_string()
+}
+
+fn get_program_link(document: &scraper::Html) -> String {
+    let selector = scraper::Selector::parse("div a").unwrap();
+    for p in document.select(&selector) {
+        return p.value().attr("href").unwrap_or("").to_string();
+    }
+    "".to_string()
+}
+
+fn get_program_name(document: &scraper::Html) -> String {
+    let selector = scraper::Selector::parse("div a p").unwrap();
+    for p in document.select(&selector) {
+        return p.text().next().unwrap_or("").to_string();
+    }
+
+    "".to_string()
+}
+
+fn type_of<T>(_: &T) -> &'static str {
+    std::any::type_name::<T>()
 }
