@@ -158,8 +158,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
     }
 
+    let target = Local::now() + Duration::hours(2);
     for (_k, v) in &programs {
-        if v.end_time < now {
+        if v.end_time < now || v.end_time > target.format("%Y%m%d%H%M").to_string() {
             continue;
         }
         println!(
