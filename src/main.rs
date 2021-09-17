@@ -1,4 +1,4 @@
-use chrono::Local;
+use chrono::{Duration, Local};
 use scraper;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
@@ -158,13 +158,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
     }
 
-    let target = Local::now() + Duration::hours(2);
+    let target = Local::now() + Duration::hours(4);
+    let mut lines: HashMap<&str, bool> = HashMap::new();
     for (_k, v) in &programs {
         if v.end_time < now || v.end_time > target.format("%Y%m%d%H%M").to_string() {
             continue;
         }
+        // &now[0..8];
+        let month: String = (&v.start_time)[4..6].to_string();
+        let day: String = (&v.start_time)[6..8].to_string();
+        let hour: String = (&v.start_time)[8..10].to_string();
+
+        let k: String = (&v.start_time)[0..10].to_string();
+        if !lines.contains_key(&*k) {
+            println!(
+                "\n{}/{} {}時~\n--------------------------------------------",
+                month, day, hour
+            );
+            lines.insert(&v.start_time[0..10], true);
+        }
+
         println!(
-            "{}:{}~{}:{} 【{}】{} [{}]",
+            "{}:{}~{}:{} 【{}】\t{} [{}]",
             &v.start_time[8..10],
             &v.start_time[10..12],
             &v.end_time[8..10],
@@ -213,8 +228,4 @@ fn get_program_name(document: &scraper::Html) -> String {
     }
 
     "".to_string()
-}
-
-fn type_of<T>(_: &T) -> &'static str {
-    std::any::type_name::<T>()
 }
