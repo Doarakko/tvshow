@@ -21,7 +21,7 @@ tvshow -h
 ```
 
 ```
-tvshow 0.1.0
+tvshow 0.1.2
 
 USAGE:
     tvshow [OPTIONS]
