@@ -158,7 +158,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
     }
 
-    let target = Local::now() + Duration::hours(4);
+    let target = Local::now() + Duration::hours(2);
     let mut lines: HashMap<&str, bool> = HashMap::new();
     for (_k, v) in &programs {
         if v.end_time < now || v.end_time > target.format("%Y%m%d%H%M").to_string() {
