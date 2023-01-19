@@ -2,7 +2,7 @@
 
 ![crates](https://img.shields.io/crates/v/tvshow.svg) ![Licence](https://img.shields.io/github/license/Doarakko/tvshow)
 
-show japanese tv schedules on cli.
+Display Japanese TV schedules in the terminal.
 
 ## Requirement
 
