@@ -133,10 +133,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .id()
             .unwrap()
             .to_string();
-        let channel_id: usize = channel
-            .replace("program_line_", "")
-            .parse()
-            .unwrap();
+        let channel_id: usize = channel.replace("program_line_", "").parse().unwrap();
 
         let id = node.value().attr("se-id");
         let inner_html = node.inner_html();
@@ -165,7 +162,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
     }
 
-    let target = (now + Duration::hours(args.hours)).format("%Y%m%d%H%M").to_string();
+    let target = (now + Duration::hours(args.hours))
+        .format("%Y%m%d%H%M")
+        .to_string();
     let mut lines: HashMap<&str, bool> = HashMap::new();
     for v in programs.values() {
         // 終了済みの番組はスキップ
