@@ -115,20 +115,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut programs = BTreeMap::new();
     for node in document.select(&program_selector) {
         let parent = node.parent();
-        let channel = &(parent
+        let channel = parent
             .iter()
             .next()
             .unwrap()
             .value()
             .as_element()
             .unwrap()
-            .id)
-            .as_ref()
+            .id()
             .unwrap()
             .to_string();
-        let channel_id: usize = String::from(channel)
+        let channel_id: usize = channel
             .replace("program_line_", "")
-            .to_string()
             .parse()
             .unwrap();
 
