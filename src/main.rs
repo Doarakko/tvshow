@@ -138,6 +138,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let description = get_program_description(&fragment);
         let start_time = node.value().attr("s");
         let end_time = node.value().attr("e");
+
         if name.is_empty() {
             continue;
         }
@@ -156,13 +157,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
     }
 
-    let target = Local::now() + Duration::hours(2);
+    let target = (Local::now() + Duration::hours(2)).format("%Y%m%d%H%M").to_string();
     let mut lines: HashMap<&str, bool> = HashMap::new();
     for v in programs.values() {
-        if v.end_time < now || v.end_time > target.format("%Y%m%d%H%M").to_string() {
+        if v.end_time < now || v.end_time > target {
             continue;
         }
-        // &now[0..8];
         let month: String = (&v.start_time)[4..6].to_string();
         let day: String = (&v.start_time)[6..8].to_string();
         let hour: String = (&v.start_time)[8..10].to_string();
@@ -224,7 +224,7 @@ fn get_program_link(document: &scraper::Html) -> String {
 }
 
 fn get_program_name(document: &scraper::Html) -> String {
-    let selector = scraper::Selector::parse("p.program_title").unwrap();
+    let selector = scraper::Selector::parse(".program_title").unwrap();
     document
         .select(&selector)
         .next()
