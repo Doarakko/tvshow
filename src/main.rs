@@ -11,6 +11,7 @@ struct Cli {
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 struct Program {
     id: String,
     channel: usize,
@@ -222,7 +223,7 @@ fn get_program_link(document: &scraper::Html) -> String {
 }
 
 fn get_program_name(document: &scraper::Html) -> String {
-    let selector = scraper::Selector::parse("div a p").unwrap();
+    let selector = scraper::Selector::parse("p.program_title").unwrap();
     for p in document.select(&selector) {
         return p.text().next().unwrap_or("").to_string();
     }
