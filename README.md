@@ -4,14 +4,19 @@
 
 Display Japanese TV schedules in the terminal.
 
-## Requirement
-
-- cargo
-
 ## Install
+
+### Cargo
 
 ```bash
 cargo install tvshow
+```
+
+### Homebrew
+
+```bash
+brew tap Doarakko/homebrew-tap
+brew install tvshow
 ```
 
 ## Usage
@@ -67,6 +72,19 @@ tvshow -a 札幌
 ## Credit
 
 This TV schedule is got from [テレビ番組表 G ガイド](https://bangumi.org).
+
+## Release
+
+1. Update version in `Cargo.toml`
+2. Push git tag
+    ```bash
+    git tag v0.1.3
+    git push origin v0.1.3
+    ```
+3. Update Homebrew formula
+    ```bash
+    ./scripts/update-homebrew.sh 0.1.3
+    ```
 
 ## Licence
 
