@@ -1,4 +1,4 @@
-use chrono::{Duration, Local};
+use chrono::{Duration, Local, Timelike};
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use structopt::StructOpt;
@@ -7,6 +7,8 @@ use structopt::StructOpt;
 struct Cli {
     #[structopt(short = "a", long = "area", default_value = "東京")]
     area: String,
+    #[structopt(short = "t", long = "hours", default_value = "2")]
+    hours: i64,
 }
 
 #[derive(Debug)]
@@ -98,8 +100,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         panic!("invalid area, please choose from here.\n{}", s);
     }
 
-    let now = Local::now().format("%Y%m%d%H%M").to_string();
-    let date = &now[0..8];
+    let now = Local::now();
+    let now_str = now.format("%Y%m%d%H%M").to_string();
+    // TV番組表は5時を起点とするため、5時より前は前日の番組表を取得
+    let date = if now.hour() < 5 {
+        (now - Duration::days(1)).format("%Y%m%d").to_string()
+    } else {
+        now.format("%Y%m%d").to_string()
+    };
 
     let url = format!(
         "https://bangumi.org/epg/td?broad_cast_date={}&ggm_group_id={}",
@@ -115,22 +123,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut programs = BTreeMap::new();
     for node in document.select(&program_selector) {
         let parent = node.parent();
-        let channel = &(parent
+        let channel = parent
             .iter()
             .next()
             .unwrap()
             .value()
             .as_element()
             .unwrap()
-            .id)
-            .as_ref()
+            .id()
             .unwrap()
             .to_string();
-        let channel_id: usize = String::from(channel)
-            .replace("program_line_", "")
-            .to_string()
-            .parse()
-            .unwrap();
+        let channel_id: usize = channel.replace("program_line_", "").parse().unwrap();
 
         let id = node.value().attr("se-id");
         let inner_html = node.inner_html();
@@ -140,6 +143,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let description = get_program_description(&fragment);
         let start_time = node.value().attr("s");
         let end_time = node.value().attr("e");
+
         if name.is_empty() {
             continue;
         }
@@ -158,13 +162,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
     }
 
-    let target = Local::now() + Duration::hours(2);
+    let target = (now + Duration::hours(args.hours))
+        .format("%Y%m%d%H%M")
+        .to_string();
     let mut lines: HashMap<&str, bool> = HashMap::new();
     for v in programs.values() {
-        if v.end_time < now || v.end_time > target.format("%Y%m%d%H%M").to_string() {
+        // 終了済みの番組はスキップ
+        if v.end_time < now_str {
             continue;
         }
-        // &now[0..8];
+        // 2時間以内に開始する番組のみ表示
+        if v.start_time > target {
+            continue;
+        }
         let month: String = (&v.start_time)[4..6].to_string();
         let day: String = (&v.start_time)[6..8].to_string();
         let hour: String = (&v.start_time)[8..10].to_string();
@@ -226,7 +236,7 @@ fn get_program_link(document: &scraper::Html) -> String {
 }
 
 fn get_program_name(document: &scraper::Html) -> String {
-    let selector = scraper::Selector::parse("p.program_title").unwrap();
+    let selector = scraper::Selector::parse(".program_title").unwrap();
     document
         .select(&selector)
         .next()

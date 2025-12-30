@@ -15,8 +15,7 @@ cargo install tvshow
 ### Homebrew
 
 ```bash
-brew tap Doarakko/homebrew-tap
-brew install tvshow
+brew install Doarakko/tap/tvshow
 ```
 
 ## Usage
