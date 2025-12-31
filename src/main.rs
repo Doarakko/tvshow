@@ -2,12 +2,13 @@ use chrono::{Duration, Local, Timelike};
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use structopt::StructOpt;
+use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 #[derive(StructOpt)]
 struct Cli {
     #[structopt(short = "a", long = "area", default_value = "東京")]
     area: String,
-    #[structopt(short = "t", long = "hours", default_value = "2")]
+    #[structopt(short = "t", long = "hours", default_value = "12")]
     hours: i64,
 }
 
@@ -165,39 +166,103 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let target = (now + Duration::hours(args.hours))
         .format("%Y%m%d%H%M")
         .to_string();
-    let mut lines: HashMap<&str, bool> = HashMap::new();
+
+    // チャンネルごとに番組をグループ化
+    let mut channel_programs: HashMap<usize, Vec<&Program>> = HashMap::new();
     for v in programs.values() {
         // 終了済みの番組はスキップ
         if v.end_time < now_str {
             continue;
         }
-        // 2時間以内に開始する番組のみ表示
+        // N時間以内に開始する番組のみ表示
         if v.start_time > target {
             continue;
         }
-        let month: String = (&v.start_time)[4..6].to_string();
-        let day: String = (&v.start_time)[6..8].to_string();
-        let hour: String = (&v.start_time)[8..10].to_string();
+        channel_programs.entry(v.channel).or_default().push(v);
+    }
 
-        let k: String = (&v.start_time)[0..10].to_string();
-        if !lines.contains_key(&*k) {
-            println!(
-                "\n{}/{} {}時~\n--------------------------------------------",
-                month, day, hour
-            );
-            lines.insert(&v.start_time[0..10], true);
+    // 存在するチャンネルをソートして最大8チャンネルまで表示
+    let mut sorted_channels: Vec<usize> = channel_programs.keys().cloned().collect();
+    sorted_channels.sort();
+    sorted_channels.truncate(8);
+
+    // 列幅の設定
+    let col_width = 20;
+    let time_width = 11;
+
+    // ヘッダー出力（チャンネル名）
+    print!("{}", " ".repeat(time_width));
+    for &ch in &sorted_channels {
+        let ch_name = if ch > 0 && ch <= channels.len() {
+            truncate_string(&channels[ch - 1], col_width - 1)
+        } else {
+            format!("Ch{}", ch)
+        };
+        print!("│{}", center_string(&ch_name, col_width));
+    }
+    println!("│");
+
+    // 区切り線
+    print!("{}", "─".repeat(time_width));
+    for _ in &sorted_channels {
+        print!("┼{}", "─".repeat(col_width));
+    }
+    println!("┤");
+
+    // 現在時刻の時間から表示
+    let current_hour = now.hour() as i32;
+    let end_hour = current_hour + args.hours as i32;
+
+    for hour in current_hour..=end_hour {
+        let display_hour = hour % 24;
+        let hour_str = format!("{:02}", display_hour);
+
+        // 各チャンネルのこの時間帯の番組を取得
+        let mut hour_programs: Vec<Option<&Program>> = Vec::new();
+        for &ch in &sorted_channels {
+            if let Some(progs) = channel_programs.get(&ch) {
+                let prog = progs
+                    .iter()
+                    .find(|p| p.start_time.get(8..10) == Some(&hour_str));
+                hour_programs.push(prog.copied());
+            } else {
+                hour_programs.push(None);
+            }
         }
 
-        println!(
-            "{}:{}~{}:{} 【{}】\t{} [{}]",
-            &v.start_time[8..10],
-            &v.start_time[10..12],
-            &v.end_time[8..10],
-            &v.end_time[10..12],
-            channels[v.channel - 1],
-            v.name,
-            v.id,
-        );
+        // 1行目: 時刻と番組名
+        print!(" {:02}:00     ", display_hour);
+        for prog in &hour_programs {
+            if let Some(p) = prog {
+                let time_str = format!(
+                    "{}:{}",
+                    p.start_time.get(8..10).unwrap_or("??"),
+                    p.start_time.get(10..12).unwrap_or("??")
+                );
+                let name = truncate_string(&p.name, col_width - 7);
+                let cell = format!("{} {}", time_str, name);
+                print!("│{}", pad_string(&cell, col_width));
+            } else {
+                print!("│{}", " ".repeat(col_width));
+            }
+        }
+        println!("│");
+
+        // 2行目: 番組名の続き
+        print!("{}", " ".repeat(time_width));
+        for prog in &hour_programs {
+            if let Some(p) = prog {
+                // 1行目で表示した分をスキップして続きを表示
+                let name_chars: Vec<char> = p.name.chars().filter(|c| !is_emoji(*c)).collect();
+                let first_line_len = truncate_string(&p.name, col_width - 7).chars().count();
+                let remaining: String = name_chars.iter().skip(first_line_len).collect();
+                let second_line = truncate_string(&remaining, col_width - 1);
+                print!("│ {}", pad_string(&second_line, col_width - 1));
+            } else {
+                print!("│{}", " ".repeat(col_width));
+            }
+        }
+        println!("│");
     }
 
     println!("\nThis TV schedule is got from テレビ番組表Gガイド(https://bangumi.org).");
@@ -243,4 +308,61 @@ fn get_program_name(document: &scraper::Html) -> String {
         .and_then(|p| p.text().next())
         .unwrap_or("")
         .to_string()
+}
+
+fn is_emoji(c: char) -> bool {
+    let code = c as u32;
+    // 囲み文字・記号類（🈑🈔など）
+    (0x1F100..=0x1F1FF).contains(&code)
+        || (0x1F200..=0x1F2FF).contains(&code)
+        || (0x1F300..=0x1F9FF).contains(&code)
+        || (0x2600..=0x26FF).contains(&code)
+        || (0x2700..=0x27BF).contains(&code)
+}
+
+fn string_width(s: &str) -> usize {
+    let cleaned: String = s.chars().filter(|c| !is_emoji(*c)).collect();
+    UnicodeWidthStr::width(cleaned.as_str())
+}
+
+fn truncate_string(s: &str, max_width: usize) -> String {
+    let cleaned: String = s.chars().filter(|c| !is_emoji(*c)).collect();
+    let mut result = String::new();
+    let mut width = 0;
+    for c in cleaned.chars() {
+        let char_width = UnicodeWidthChar::width(c).unwrap_or(0);
+        if width + char_width > max_width {
+            break;
+        }
+        result.push(c);
+        width += char_width;
+    }
+    result
+}
+
+fn pad_string(s: &str, target_width: usize) -> String {
+    let current_width = string_width(s);
+    if current_width >= target_width {
+        truncate_string(s, target_width)
+    } else {
+        let padding = target_width - current_width;
+        format!("{}{}", s, " ".repeat(padding))
+    }
+}
+
+fn center_string(s: &str, target_width: usize) -> String {
+    let current_width = string_width(s);
+    if current_width >= target_width {
+        truncate_string(s, target_width)
+    } else {
+        let total_padding = target_width - current_width;
+        let left_padding = total_padding / 2;
+        let right_padding = total_padding - left_padding;
+        format!(
+            "{}{}{}",
+            " ".repeat(left_padding),
+            s,
+            " ".repeat(right_padding)
+        )
+    }
 }
