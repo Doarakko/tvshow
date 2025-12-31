@@ -72,6 +72,21 @@ tvshow -a 札幌
 
 This TV schedule is got from [テレビ番組表 G ガイド](https://bangumi.org).
 
+## Contributing
+
+Before submitting a PR, run the CI checks locally:
+
+```bash
+# Build
+cargo build --release
+
+# Format
+cargo fmt
+
+# Lint
+cargo clippy -- -D warnings
+```
+
 ## Release
 
 1. Update version in `Cargo.toml`

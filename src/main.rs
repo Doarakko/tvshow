@@ -2,7 +2,7 @@ use chrono::{Duration, Local, Timelike};
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use structopt::StructOpt;
-use unicode_width::UnicodeWidthStr;
+use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 #[derive(StructOpt)]
 struct Cli {
@@ -178,10 +178,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         if v.start_time > target {
             continue;
         }
-        channel_programs
-            .entry(v.channel)
-            .or_default()
-            .push(v);
+        channel_programs.entry(v.channel).or_default().push(v);
     }
 
     // 存在するチャンネルをソートして最大8チャンネルまで表示
@@ -224,7 +221,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let mut hour_programs: Vec<Option<&Program>> = Vec::new();
         for &ch in &sorted_channels {
             if let Some(progs) = channel_programs.get(&ch) {
-                let prog = progs.iter().find(|p| &p.start_time[8..10] == hour_str);
+                let prog = progs
+                    .iter()
+                    .find(|p| p.start_time.get(8..10) == Some(&hour_str));
                 hour_programs.push(prog.copied());
             } else {
                 hour_programs.push(None);
@@ -235,7 +234,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         print!(" {:02}:00     ", display_hour);
         for prog in &hour_programs {
             if let Some(p) = prog {
-                let time_str = format!("{}:{}", &p.start_time[8..10], &p.start_time[10..12]);
+                let time_str = format!(
+                    "{}:{}",
+                    p.start_time.get(8..10).unwrap_or("??"),
+                    p.start_time.get(10..12).unwrap_or("??")
+                );
                 let name = truncate_string(&p.name, col_width - 7);
                 let cell = format!("{} {}", time_str, name);
                 print!("│{}", pad_string(&cell, col_width));
@@ -323,12 +326,7 @@ fn string_width(s: &str) -> usize {
 }
 
 fn truncate_string(s: &str, max_width: usize) -> String {
-    use unicode_width::UnicodeWidthChar;
-    // 絵文字を除去してから処理
-    let cleaned: String = s
-        .chars()
-        .filter(|c| !is_emoji(*c))
-        .collect();
+    let cleaned: String = s.chars().filter(|c| !is_emoji(*c)).collect();
     let mut result = String::new();
     let mut width = 0;
     for c in cleaned.chars() {
@@ -360,6 +358,11 @@ fn center_string(s: &str, target_width: usize) -> String {
         let total_padding = target_width - current_width;
         let left_padding = total_padding / 2;
         let right_padding = total_padding - left_padding;
-        format!("{}{}{}", " ".repeat(left_padding), s, " ".repeat(right_padding))
+        format!(
+            "{}{}{}",
+            " ".repeat(left_padding),
+            s,
+            " ".repeat(right_padding)
+        )
     }
 }
