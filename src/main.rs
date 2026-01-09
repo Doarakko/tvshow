@@ -110,57 +110,49 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         now.format("%Y%m%d").to_string()
     };
 
+    // 表示終了時刻が5時をまたぐ場合は翌日のデータも必要
+    let target_time = now + Duration::hours(args.hours);
+    let needs_next_day = if now.hour() < 5 {
+        // 現在5時前の場合、表示範囲が5時以降にかかるなら当日のデータも必要
+        target_time.hour() >= 5 || target_time.date() > now.date()
+    } else {
+        // 現在5時以降の場合、表示範囲が翌日5時以降にかかるなら翌日のデータも必要
+        target_time.date() > now.date() && target_time.hour() >= 5
+    };
+
+    let next_date = if now.hour() < 5 {
+        now.format("%Y%m%d").to_string()
+    } else {
+        (now + Duration::days(1)).format("%Y%m%d").to_string()
+    };
+
+    let mut programs = BTreeMap::new();
+    let program_selector = scraper::Selector::parse("div #program_area ul li").unwrap();
+
+    // 1日目のデータを取得
     let url = format!(
         "https://bangumi.org/epg/td?broad_cast_date={}&ggm_group_id={}",
         date,
         area_id.unwrap()
     );
-
-    let html = reqwest::get(url).await?.text().await?;
+    let html = reqwest::get(&url).await?.text().await?;
     let document = scraper::Html::parse_document(&html);
     let channels: Vec<String> = get_channels(&document);
-    let program_selector = scraper::Selector::parse("div #program_area ul li").unwrap();
+    parse_programs(&document, &program_selector, &mut programs);
 
-    let mut programs = BTreeMap::new();
-    for node in document.select(&program_selector) {
-        let parent = node.parent();
-        let channel = parent
-            .iter()
-            .next()
-            .unwrap()
-            .value()
-            .as_element()
-            .unwrap()
-            .id()
-            .unwrap()
-            .to_string();
-        let channel_id: usize = channel.replace("program_line_", "").parse().unwrap();
-
-        let id = node.value().attr("se-id");
-        let inner_html = node.inner_html();
-        let fragment = scraper::Html::parse_fragment(&inner_html);
-        let name = get_program_name(&fragment);
-        let link = get_program_link(&fragment);
-        let description = get_program_description(&fragment);
-        let start_time = node.value().attr("s");
-        let end_time = node.value().attr("e");
-
-        if name.is_empty() {
-            continue;
-        }
-
-        programs.insert(
-            start_time.unwrap_or("").to_string() + "_" + &channel_id.to_string(),
-            Program {
-                id: id.unwrap_or("").to_string()[7..].to_string(),
-                channel: channel_id,
-                name,
-                description,
-                link,
-                start_time: start_time.unwrap_or("").to_string(),
-                end_time: end_time.unwrap_or("").to_string(),
-            },
+    // 2日目のデータを取得（必要な場合）
+    if needs_next_day {
+        let url2 = format!(
+            "https://bangumi.org/epg/td?broad_cast_date={}&ggm_group_id={}",
+            next_date,
+            area_id.unwrap()
         );
+        if let Ok(html2) = reqwest::get(&url2).await {
+            if let Ok(text) = html2.text().await {
+                let document2 = scraper::Html::parse_document(&text);
+                parse_programs(&document2, &program_selector, &mut programs);
+            }
+        }
     }
 
     let target = (now + Duration::hours(args.hours))
@@ -223,7 +215,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             if let Some(progs) = channel_programs.get(&ch) {
                 let prog = progs
                     .iter()
-                    .find(|p| p.start_time.get(8..10) == Some(&hour_str));
+                    .find(|p| p.start_time.get(8..10) == Some(hour_str.as_str()));
                 hour_programs.push(prog.copied());
             } else {
                 hour_programs.push(None);
@@ -278,6 +270,57 @@ fn get_channels(document: &scraper::Html) -> Vec<String> {
     }
 
     channels
+}
+
+fn parse_programs(
+    document: &scraper::Html,
+    program_selector: &scraper::Selector,
+    programs: &mut BTreeMap<String, Program>,
+) {
+    for node in document.select(program_selector) {
+        let parent = node.parent();
+        let channel = parent
+            .iter()
+            .next()
+            .unwrap()
+            .value()
+            .as_element()
+            .unwrap()
+            .id()
+            .unwrap()
+            .to_string();
+        let channel_id: usize = channel.replace("program_line_", "").parse().unwrap();
+
+        let id = node.value().attr("se-id");
+        let inner_html = node.inner_html();
+        let fragment = scraper::Html::parse_fragment(&inner_html);
+        let name = get_program_name(&fragment);
+        let link = get_program_link(&fragment);
+        let description = get_program_description(&fragment);
+        let start_time = node.value().attr("s");
+        let end_time = node.value().attr("e");
+
+        if name.is_empty() {
+            continue;
+        }
+
+        let key = start_time.unwrap_or("").to_string() + "_" + &channel_id.to_string();
+        // 重複を避ける（同じ番組は上書きしない）
+        if !programs.contains_key(&key) {
+            programs.insert(
+                key,
+                Program {
+                    id: id.unwrap_or("").to_string().get(7..).unwrap_or("").to_string(),
+                    channel: channel_id,
+                    name,
+                    description,
+                    link,
+                    start_time: start_time.unwrap_or("").to_string(),
+                    end_time: end_time.unwrap_or("").to_string(),
+                },
+            );
+        }
+    }
 }
 
 fn get_program_description(document: &scraper::Html) -> String {
