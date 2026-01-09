@@ -310,7 +310,12 @@ fn parse_programs(
             programs.insert(
                 key,
                 Program {
-                    id: id.unwrap_or("").to_string().get(7..).unwrap_or("").to_string(),
+                    id: id
+                        .unwrap_or("")
+                        .to_string()
+                        .get(7..)
+                        .unwrap_or("")
+                        .to_string(),
                     channel: channel_id,
                     name,
                     description,
