@@ -42,7 +42,7 @@ OPTIONS:
 ## Example
 
 ```bash
-tvshow
+tvshow -a 福岡 -t 10
 ```
 
 ![sample](./sample.png)
@@ -69,12 +69,13 @@ cargo clippy -- -D warnings
 ## Release
 
 1. Update version in `Cargo.toml`
-2. Push git tag
+1. Merge to `main` branch
+1. Push git tag
     ```bash
     git tag v0.1.3
     git push origin v0.1.3
     ```
-3. Update Homebrew formula
+1. Update Homebrew formula
     ```bash
     ./scripts/update-homebrew.sh 0.1.3
     ```
