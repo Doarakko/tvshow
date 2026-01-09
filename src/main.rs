@@ -114,10 +114,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let target_time = now + Duration::hours(args.hours);
     let needs_next_day = if now.hour() < 5 {
         // 現在5時前の場合、表示範囲が5時以降にかかるなら当日のデータも必要
-        target_time.hour() >= 5 || target_time.date() > now.date()
+        target_time.hour() >= 5 || target_time.date_naive() > now.date_naive()
     } else {
         // 現在5時以降の場合、表示範囲が翌日5時以降にかかるなら翌日のデータも必要
-        target_time.date() > now.date() && target_time.hour() >= 5
+        target_time.date_naive() > now.date_naive() && target_time.hour() >= 5
     };
 
     let next_date = if now.hour() < 5 {
