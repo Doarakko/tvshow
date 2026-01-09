@@ -306,25 +306,20 @@ fn parse_programs(
 
         let key = start_time.unwrap_or("").to_string() + "_" + &channel_id.to_string();
         // 重複を避ける（同じ番組は上書きしない）
-        if !programs.contains_key(&key) {
-            programs.insert(
-                key,
-                Program {
-                    id: id
-                        .unwrap_or("")
-                        .to_string()
-                        .get(7..)
-                        .unwrap_or("")
-                        .to_string(),
-                    channel: channel_id,
-                    name,
-                    description,
-                    link,
-                    start_time: start_time.unwrap_or("").to_string(),
-                    end_time: end_time.unwrap_or("").to_string(),
-                },
-            );
-        }
+        programs.entry(key).or_insert_with(|| Program {
+            id: id
+                .unwrap_or("")
+                .to_string()
+                .get(7..)
+                .unwrap_or("")
+                .to_string(),
+            channel: channel_id,
+            name,
+            description,
+            link,
+            start_time: start_time.unwrap_or("").to_string(),
+            end_time: end_time.unwrap_or("").to_string(),
+        });
     }
 }
 
