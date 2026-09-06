@@ -59,11 +59,14 @@ Before submitting a PR, run the CI checks locally:
 # Build
 cargo build --release
 
+# Test
+cargo test
+
 # Format
 cargo fmt
 
 # Lint
-cargo clippy -- -D warnings
+cargo clippy --all-targets -- -D warnings
 ```
 
 ## Release
