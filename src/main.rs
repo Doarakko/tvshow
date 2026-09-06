@@ -345,7 +345,8 @@ fn parse_programs(
         let Some(channel_id) = node
             .parent()
             .and_then(|parent| parent.value().as_element().and_then(|e| e.id()))
-            .and_then(|line_id| line_id.replace("program_line_", "").parse::<usize>().ok())
+            .and_then(|line_id| line_id.strip_prefix("program_line_"))
+            .and_then(|channel| channel.parse::<usize>().ok())
         else {
             continue;
         };
@@ -934,6 +935,26 @@ mod tests {
     fn parse_programs_skips_rows_whose_parent_id_is_not_numeric() {
         let html = epg_html(
             r#"<ul id="program_line_abc">
+                 <li s="202601101200" e="202601101300">
+                   <div><p class="program_title">ニュース</p></div>
+                 </li>
+               </ul>"#,
+        );
+        let mut programs = BTreeMap::new();
+        parse_programs(&html, &program_selector(), &mut programs);
+        assert!(programs.is_empty());
+    }
+
+    #[test]
+    fn parse_programs_skips_rows_whose_parent_id_only_contains_the_prefix() {
+        // replace ではなく strip_prefix なので、接頭辞が繰り返される id は弾く
+        let html = epg_html(
+            r#"<ul id="program_line_1program_line_">
+                 <li s="202601101200" e="202601101300">
+                   <div><p class="program_title">ニュース</p></div>
+                 </li>
+               </ul>
+               <ul id="xprogram_line_2">
                  <li s="202601101200" e="202601101300">
                    <div><p class="program_title">ニュース</p></div>
                  </li>
